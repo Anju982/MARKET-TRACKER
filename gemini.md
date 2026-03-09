@@ -20,6 +20,10 @@ The Commodity Price Tracker is a real-time dashboard that fetches live market da
 3. **`PricesStore.py`:** An in-memory, thread-safe data structure (`self.data`) wrapped with a `threading.Lock()` to hold the latest price updates.
 4. **`WebSocket.py`:** A `WebSocketManager` class running in a daemon thread. It parses incoming Finnhub JSON `trade` messages and pushes the latest `p` (price), `v` (volume), and `t` (timestamp) to the `PricesStore`.
 5. **`config.py`:** Centralized configuration containing `SYMBOL_MAP` (mapping API symbols to readable names) and `CATEGORIES` (grouping assets).
+6. **`news.py`:** Fetches market news from Finnhub API.
+7. **`NewsStore.py`:** Thread-safe in-memory store for news articles with debounced fetching.
+8. **`historical.py`:** Fetches historical price data from Yahoo Finance and maps API symbols to tickers.
+9. **`technical.py`:** Calculates technical indicators (SMA, EMA, RSI, Bollinger Bands) and adds them to Plotly charts.
 
 ## Future Development Guidelines
 

@@ -8,6 +8,9 @@ A real-time market dashboard built with FastAPI and Streamlit that tracks live p
 - **`app.py`**: The Streamlit frontend application. It connects to the FastAPI backend to visualize the live market data.
 - **`PricesStore.py`**: An in-memory thread-safe store managing the state of all tracked symbols.
 - **`WebSocket.py`**: Manages the persistent WebSocket connection to Finnhub to stream live market trades.
+- **`news.py` & `NewsStore.py`**: Fetches and manages real-time news articles from Finnhub.
+- **`historical.py`**: Fetches historical price data using Yahoo Finance.
+- **`technical.py`**: Computes and visualizes technical indicators (SMA, BB, etc.) on interactive charts.
 - **`config.py`**: Contains constants like `SYMBOL_MAP` and `CATEGORIES` for what the application tracks.
 - **`requirment.txt`**: List of Python dependencies required to run the application.
 
