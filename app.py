@@ -9,6 +9,8 @@ from datetime import datetime
 
 import requests
 import streamlit as st
+import pandas as pd
+import plotly.express as px
 
 # ── Config ────────────────────────────────────────────────────────────────────
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
@@ -199,6 +201,14 @@ def fetch_news(since=None) -> dict:
     except Exception as e:
         return {"items": [], "scraped_at": None, "error": str(e)}
 
+def fetch_historical(symbol: str, time_range: str = "1Y") -> dict:
+    try:
+        r = requests.get(f"{BACKEND_URL}/api/historical?symbol={symbol}&range={time_range}", timeout=6)
+        r.raise_for_status()
+        return r.json()
+    except Exception as e:
+        return {"error": str(e), "data": []}
+
 
 def fmt_price(price: float, symbol: str) -> str:
     if symbol in {"BTC/USDT", "ETH/USDT"}:
@@ -220,22 +230,98 @@ def render_card(record: dict) -> str:
     arrow   = "▲" if chg >= 0 else "▼"
     cls     = "card-change-up" if chg >= 0 else "card-change-down"
 
+    # Clicking the card will navigate to the commodity page
     return f"""
-    <div class="price-card">
-        <div class="card-symbol">{symbol}</div>
-        <div class="card-price">{fmt_price(price, symbol)}</div>
-        <div class="{cls}">{arrow} {abs(chg_pct):.3f}%</div>
-        <div class="card-time">🕐 {t}</div>
-        <div class="card-vol">vol {vol:,.4f}</div>
-    </div>
+    <a href="/?symbol={symbol}" target="_self" style="text-decoration: none; color: inherit;">
+        <div class="price-card">
+            <div class="card-symbol">{symbol}</div>
+            <div class="card-price">{fmt_price(price, symbol)}</div>
+            <div class="{cls}">{arrow} {abs(chg_pct):.3f}%</div>
+            <div class="card-time">🕐 {t}</div>
+            <div class="card-vol">vol {vol:,.4f}</div>
+        </div>
+    </a>
     """
 
 
 def render_no_data() -> str:
     return '<div class="price-card"><div class="no-data">⏳ Waiting for data…</div></div>'
 
+def render_historical_page(symbol: str):
+    # Back button
+    if st.button("← Back to Dashboard"):
+        st.query_params.clear()
+        st.rerun()
+    
+    st.markdown(f'<div class="dash-title">📉 {symbol} Historical</div>', unsafe_allow_html=True)
+    
+    # Range selector
+    col_range, _ = st.columns([1, 4])
+    with col_range:
+        time_range = st.select_slider(
+            "Select Range",
+            options=["1M", "3M", "6M", "1Y", "5Y", "MAX"],
+            value="1Y"
+        )
+    
+    # Fetch data
+    with st.spinner(f"Loading {time_range} data for {symbol}..."):
+        result = fetch_historical(symbol, time_range)
+    
+    if "error" in result:
+        st.error(f"Error: {result['error']}")
+        if st.button("Retry"):
+            st.rerun()
+        return
+    
+    data = result.get("data", [])
+    if not data:
+        st.warning("No historical data available for this range.")
+        return
+    
+    # Render chart
+    df = pd.DataFrame(data)
+    df['date'] = pd.to_datetime(df['date'])
+    
+    fig = px.line(df, x='date', y='price', title=f"{symbol} Price Movement ({time_range})")
+    
+    # Modern styling for the chart
+    fig.update_layout(
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        font_color='#c9d8e8',
+        margin=dict(l=0, r=0, t=40, b=0),
+        xaxis=dict(showgrid=True, gridcolor='#1a2a40', title="Date"),
+        yaxis=dict(showgrid=True, gridcolor='#1a2a40', title="Price"),
+    )
+    fig.update_traces(line_color='#00e5a0', line_width=2)
+    
+    st.plotly_chart(fig, use_container_width=True)
+    
+    # Show stats
+    if not df.empty:
+        c1, c2, c3 = st.columns(3)
+        current_p = df['price'].iloc[-1]
+        start_p = df['price'].iloc[0]
+        nodes = len(df)
+        
+        c1.metric("Current Price", fmt_price(current_p, symbol))
+        c2.metric("Period Start", fmt_price(start_p, symbol))
+        
+        chg = current_p - start_p
+        chg_pct = (chg / start_p) * 100
+        c3.metric("Period Change", f"{chg_pct:+.2f}%", delta=f"{chg:+.2f}")
+
 
 # ── Main render ───────────────────────────────────────────────────────────────
+# Navigation check
+target_symbol = st.query_params.get("symbol")
+
+if target_symbol:
+    render_historical_page(target_symbol)
+    # Stop execution here for the historical page view
+    st.stop()
+
 # Header
 st.markdown(
     """
