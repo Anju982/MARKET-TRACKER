@@ -11,6 +11,8 @@ import requests
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
+import technical
 
 # ── Config ────────────────────────────────────────────────────────────────────
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
@@ -264,6 +266,13 @@ def render_historical_page(symbol: str):
             value="1Y"
         )
     
+    with col_range:
+        selected_indicators = st.multiselect(
+            "Technical Indicators",
+            options=["SMA 20", "SMA 50", "EMA 20", "Bollinger Bands", "RSI 14"],
+            default=[]
+        )
+    
     # Fetch data
     with st.spinner(f"Loading {time_range} data for {symbol}..."):
         result = fetch_historical(symbol, time_range)
@@ -283,20 +292,49 @@ def render_historical_page(symbol: str):
     df = pd.DataFrame(data)
     df['date'] = pd.to_datetime(df['date'])
     
-    fig = px.line(df, x='date', y='price', title=f"{symbol} Price Movement ({time_range})")
+    # Calculate indicators
+    if selected_indicators:
+        df = technical.calculate_indicators(df)
+    
+    fig = go.Figure()
+    
+    # Base price line
+    fig.add_trace(go.Scatter(x=df['date'], y=df['price'], mode='lines', name='Price', line=dict(color='#00e5a0', width=2)))
+    
+    # Add indicators
+    if selected_indicators:
+        technical.add_indicators_to_fig(fig, df, selected_indicators)
     
     # Modern styling for the chart
     fig.update_layout(
+        title=f"{symbol} Price Movement ({time_range})",
         plot_bgcolor='rgba(0,0,0,0)',
         paper_bgcolor='rgba(0,0,0,0)',
         font_color='#c9d8e8',
         margin=dict(l=0, r=0, t=40, b=0),
         xaxis=dict(showgrid=True, gridcolor='#1a2a40', title="Date"),
         yaxis=dict(showgrid=True, gridcolor='#1a2a40', title="Price"),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
     )
-    fig.update_traces(line_color='#00e5a0', line_width=2)
     
     st.plotly_chart(fig, use_container_width=True)
+    
+    # Special section for RSI if selected (RSI is usually shown separately)
+    if "RSI 14" in selected_indicators and not df.empty:
+        st.markdown("#### RSI (14)")
+        rsi_fig = px.line(df, x='date', y='RSI_14', range_y=[0, 100])
+        rsi_fig.update_layout(
+            height=200,
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)',
+            font_color='#c9d8e8',
+            margin=dict(l=0, r=0, t=20, b=0),
+            xaxis=dict(showgrid=True, gridcolor='#1a2a40'),
+            yaxis=dict(showgrid=True, gridcolor='#1a2a40', title="RSI"),
+        )
+        rsi_fig.add_hline(y=70, line_dash="dash", line_color="red", line_width=1)
+        rsi_fig.add_hline(y=30, line_dash="dash", line_color="green", line_width=1)
+        st.plotly_chart(rsi_fig, use_container_width=True)
     
     # Show stats
     if not df.empty:

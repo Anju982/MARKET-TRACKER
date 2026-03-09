@@ -25,7 +25,9 @@ SYMBOL_MAP: Dict[str, str] = {
     "OANDA:UK100_GBP":  "UK 100",
     "BINANCE:BTCUSDT":  "BTC/USDT",
     "BINANCE:ETHUSDT":  "ETH/USDT",
-    "BINANCE:SOLUSDT":  "SOL/USDT",
+    "BINANCE:SOLUSDT":  "SOLUSDT",
+    "OANDA:VIX_USD":    "VIX",
+    "OANDA:USDOLLAR":   "DXY",
 }
 
 CATEGORIES: Dict[str, list] = {
@@ -41,5 +43,8 @@ CATEGORIES: Dict[str, list] = {
     ],
     "Crypto": [
         "BTC/USDT", "ETH/USDT", "SOL/USDT",
+    ],
+    "Risk Factors": [
+        "VIX", "DXY",
     ],
 }

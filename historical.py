@@ -27,6 +27,8 @@ YFINANCE_TICKERS = {
     "OANDA:SPX500_USD": "^GSPC",  # S&P 500
     "OANDA:DE30_EUR":   "^GDAXI", # DAX
     "OANDA:UK100_GBP":  "^FTSE",  # FTSE 100
+    "OANDA:VIX_USD":    "^VIX",   # VIX
+    "OANDA:USDOLLAR":   "DX=F",   # US Dollar Index
 }
 
 def get_historical_prices(symbol: str, start: datetime, end: datetime, api_token: Optional[str] = None) -> List[Dict]:
