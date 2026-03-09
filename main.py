@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 from config import SYMBOL_MAP, CATEGORIES
 from PricesStore import PricesStore
 from WebSocket import WebSocketManager
+from NewsStore import NewsStore
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(title="Live Market Data API", version="1.0.0", description="API for fetching live market data")
@@ -28,6 +29,8 @@ finhubAPIkey = os.getenv("FinHubAPI")
 
 price_store = PricesStore()
 websocket_manager = WebSocketManager(symbols=list(SYMBOL_MAP.keys()), store=price_store, FINNHUB_TOKEN=finhubAPIkey)
+
+news_store = NewsStore(api_token=finhubAPIkey)
 
 @app.on_event("startup")
 def startup():
@@ -49,6 +52,12 @@ def get_symbol_price(symbol_name: str):
     if record is None:
         return {"error": f"Symbol '{symbol_name}' not found or no data yet."}
     return record
+
+
+@app.get("/news")
+def get_news(since_timestamp: Optional[str] = None):
+    """Return news strictly newer than since_timestamp (optional)."""
+    return news_store.get_news_since(since_timestamp)
 
 
 @app.get("/health")

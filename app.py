@@ -188,6 +188,17 @@ def fetch_prices() -> dict:
     except Exception as e:
         return {"error": str(e), "data": {}, "categories": {}}
 
+def fetch_news(since=None) -> dict:
+    url = f"{BACKEND_URL}/news"
+    if since:
+        url += f"?since_timestamp={since}"
+    try:
+        r = requests.get(url, timeout=4)
+        r.raise_for_status()
+        return r.json()
+    except Exception as e:
+        return {"items": [], "scraped_at": None, "error": str(e)}
+
 
 def fmt_price(price: float, symbol: str) -> str:
     if symbol in {"BTC/USDT", "ETH/USDT"}:
@@ -260,30 +271,96 @@ if err:
     time.sleep(3)
     st.rerun()
 
+# News fetching
+if "news_items" not in st.session_state:
+    st.session_state.news_items = []
+if "last_news_fetch_time" not in st.session_state:
+    st.session_state.last_news_fetch_time = 0
+if "news_scraped_at" not in st.session_state:
+    st.session_state.news_scraped_at = None
+
+current_time = time.time()
+if current_time - st.session_state.last_news_fetch_time >= 600: # 10 minutes
+    news_payload = fetch_news(st.session_state.news_scraped_at)
+    new_items = news_payload.get("items", [])
+    
+    # Prepend new items and deduplicate based on URL/Title
+    if new_items:
+        existing_urls = {item.get("url") for item in st.session_state.news_items}
+        filtered_new = [item for item in new_items if item.get("url") not in existing_urls]
+        st.session_state.news_items = filtered_new + st.session_state.news_items
+        
+    if news_payload.get("scraped_at"):
+        st.session_state.news_scraped_at = news_payload.get("scraped_at")
+    st.session_state.last_news_fetch_time = current_time
+
 # Stats row
 active = len(prices)
 total  = sum(len(v) for v in cats.values())
 now    = datetime.now().strftime("%H:%M:%S")
 
-col1, col2, col3, col4 = st.columns(4)
-col1.metric("Active Feeds", active, delta=None)
-col2.metric("Total Symbols", total)
-col3.metric("Last Update", now)
-col4.metric("Refresh Rate", f"{refresh}s")
+main_col, news_col = st.columns([3, 1], gap="large")
 
-# Per-category grids
-for cat_name, symbols in cats.items():
-    icon = CATEGORY_ICONS.get(cat_name, "")
-    st.markdown(f'<div class="cat-header">{icon} {cat_name}</div>', unsafe_allow_html=True)
+with main_col:
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Active Feeds", active, delta=None)
+    col2.metric("Total Symbols", total)
+    col3.metric("Last Update", now)
+    col4.metric("Refresh Rate", f"{refresh}s")
+    
+    # Per-category grids
+    for cat_name, symbols in cats.items():
+        icon = CATEGORY_ICONS.get(cat_name, "")
+        st.markdown(f'<div class="cat-header">{icon} {cat_name}</div>', unsafe_allow_html=True)
+    
+        cols = st.columns(4)
+        for i, sym in enumerate(symbols):
+            record = prices.get(sym)
+            with cols[i % 4]:
+                if record:
+                    st.markdown(render_card(record), unsafe_allow_html=True)
+                else:
+                    st.markdown(render_no_data(), unsafe_allow_html=True)
 
-    cols = st.columns(4)
-    for i, sym in enumerate(symbols):
-        record = prices.get(sym)
-        with cols[i % 4]:
-            if record:
-                st.markdown(render_card(record), unsafe_allow_html=True)
-            else:
-                st.markdown(render_no_data(), unsafe_allow_html=True)
+with news_col:
+    with st.expander("📰 News", expanded=True):
+        updated_str = "Never"
+        if st.session_state.news_scraped_at:
+            try:
+                dt = datetime.fromisoformat(st.session_state.news_scraped_at.replace("Z", "+00:00"))
+                updated_str = dt.astimezone().strftime("%H:%M")
+            except:
+                updated_str = "Unknown"
+                
+        st.markdown(f"<div style='font-size: 0.8em; color: #888; margin-bottom: 10px;'>Updated at {updated_str}</div>", unsafe_allow_html=True)
+        
+        for item in st.session_state.news_items[:20]: # show top 20
+            # format related time
+            pub_date_str = item.get("published_at")
+            relative_time = pub_date_str
+            if pub_date_str:
+                try:
+                    pub_dt = datetime.fromisoformat(pub_date_str.replace("Z", "+00:00"))
+                    diff = datetime.now(pub_dt.tzinfo) - pub_dt
+                    if diff.total_seconds() < 3600:
+                        relative_time = f"{int(diff.total_seconds() / 60)} min ago"
+                    elif diff.total_seconds() < 86400:
+                        relative_time = f"{int(diff.total_seconds() / 3600)} hr ago"
+                    else:
+                        relative_time = f"{int(diff.total_seconds() / 86400)} days ago"
+                except:
+                    pass
+                    
+            st.markdown(f"""
+            <div style='margin-bottom: 12px; border-bottom: 1px solid #1a2a40; padding-bottom: 8px;'>
+                <div style='font-size: 0.9em; font-weight: bold; margin-bottom: 4px;'>
+                    <a href='{item.get("url")}' target='_blank' style='color: #c9d8e8; text-decoration: none;'>{item.get("title")}</a>
+                </div>
+                <div style='font-size: 0.7em; color: #666;'>
+                    {item.get("source_name")} • {relative_time}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
 
 # Status bar
 st.markdown(
