@@ -29,6 +29,20 @@ YFINANCE_TICKERS = {
     "OANDA:UK100_GBP":  "^FTSE",  # FTSE 100
     "OANDA:VIX_USD":    "^VIX",   # VIX
     "OANDA:USDOLLAR":   "DX=F",   # US Dollar Index
+    "OANDA:JP225_USD":  "^N225",  # Nikkei 225
+    "OANDA:KR200_USD":  "^KS11",  # KOSPI
+    "OANDA:HK33_HKD":   "^HSI",   # Hang Seng
+    "OANDA:CN50_USD":   "000001.SS", # Shanghai Composite
+    "OANDA:IN50_USD":   "^NSEI",  # Nifty 50
+    "^BSESN":           "^BSESN", # BSE Sensex
+    "JKM=F":            "JKM=F",  # LNG
+    "LIT":              "LIT",    # Lithium
+    "VLO":              "VLO",    # Bitumen (Valero proxy)
+    "SPH":              "SPH",    # Propane
+    "COAL":             "COAL",   # Coal
+    "DC=F":             "DC=F",   # Milk Powder
+    "UFV=F":            "UFV=F",  # Urea
+    "MLM":              "MLM",    # Clinker (Martin Marietta proxy)
 }
 
 def get_historical_prices(symbol: str, start: datetime, end: datetime, api_token: Optional[str] = None) -> List[Dict]:

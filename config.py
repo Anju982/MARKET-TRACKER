@@ -28,18 +28,34 @@ SYMBOL_MAP: Dict[str, str] = {
     "BINANCE:SOLUSDT":  "SOLUSDT",
     "OANDA:VIX_USD":    "VIX",
     "OANDA:USDOLLAR":   "DXY",
+    "OANDA:JP225_USD":  "NIKKEI 225",
+    "OANDA:KR200_USD":  "KOSPI 200",
+    "OANDA:HK33_HKD":   "HANG SENG",
+    "OANDA:CN50_USD":   "SHANGHAI COMP",
+    "OANDA:IN50_USD":   "NIFTY 50",
+    "^BSESN":           "BSE SENSEX",
+    "JKM=F":            "LNG",
+    "LIT":              "LITHIUM & COBALT",
+    "VLO":              "BITUMEN",
+    "SPH":              "PROPANE & BUTANE",
+    "COAL":             "COAL",
+    "DC=F":             "MILK POWDER",
+    "UFV=F":            "UREA",
+    "MLM":              "CLINKER",
 }
 
 CATEGORIES: Dict[str, list] = {
     "Commodities": [
         "GOLD", "SILVER", "BRENT OIL", "WTI OIL", "NAT GAS",
         "COPPER", "WHEAT", "CORN", "SOYBEANS", "SUGAR", "PLATINUM", "PALLADIUM",
+        "LNG", "LITHIUM & COBALT", "BITUMEN", "PROPANE & BUTANE", "COAL", "MILK POWDER", "UREA", "CLINKER",
     ],
     "Bonds": [
         "US 10Y NOTE", "US 30Y BOND", "UK 10Y GILT", "GER 10Y BUND",
     ],
     "Indices": [
         "DOW JONES", "NASDAQ 100", "S&P 500", "DAX 30", "UK 100",
+        "NIKKEI 225", "KOSPI 200", "HANG SENG", "SHANGHAI COMP", "NIFTY 50", "BSE SENSEX",
     ],
     "Crypto": [
         "BTC/USDT", "ETH/USDT", "SOL/USDT",
