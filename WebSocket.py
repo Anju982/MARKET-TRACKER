@@ -32,7 +32,16 @@ class WebSocketManager:
                             ts_ms=int(trade.get("t", 0))
                         )
                 elif data.get("type") == "error":
-                    logger.error(f"[WS] API Error: {data.get('msg')}")
+                    err_msg = data.get("msg", "Unknown API error")
+                    logger.error(f"[WS] API Error: {err_msg}")
+                    # If the error contains a symbol, update it in the store
+                    sym = data.get("symbol")
+                    if sym:
+                        self.store.update_error(sym, err_msg)
+                    else:
+                        # Global error?
+                        for s in self.symbols:
+                            self.store.update_error(s, err_msg)
             except Exception as e:
                 logger.error(f"[WS] Error processing message: {e}")
 

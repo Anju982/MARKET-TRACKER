@@ -46,6 +46,15 @@ class PricesStore:
                 "direction": "up" if change >= 0 else "down",
             }
             
+    def update_error(self, raw_symbol: str, error_msg: str):
+        """Stores an error message for a symbol."""
+        name = SYMBOL_MAP.get(raw_symbol, raw_symbol)
+        with self.lock:
+            if name not in self.data:
+                self.data[name] = {"symbol": name, "raw_symbol": raw_symbol}
+            self.data[name]["error"] = error_msg
+            self.data[name]["timestamp_ms"] = int(datetime.now().timestamp() * 1000)
+
     def get_all(self) -> Dict[str, Dict[str, Any]]:
         """Returns a copy of all current price records."""
         with self.lock:

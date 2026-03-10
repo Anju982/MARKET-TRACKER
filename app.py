@@ -12,6 +12,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
 from streamlit_autorefresh import st_autorefresh
+import urllib.parse
 
 import technical
 
@@ -44,6 +45,15 @@ if os.path.exists("style.css"):
     load_css("style.css")
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+if "pinned_symbols" not in st.session_state:
+    st.session_state.pinned_symbols = set()
+
+def toggle_pin(symbol: str):
+    if symbol in st.session_state.pinned_symbols:
+        st.session_state.pinned_symbols.remove(symbol)
+    else:
+        st.session_state.pinned_symbols.add(symbol)
+
 @st.cache_data(ttl=2)
 def fetch_prices() -> dict:
     try:
@@ -84,27 +94,39 @@ def fmt_price(price: float, symbol: str) -> str:
 
 def render_card(record: dict) -> str:
     symbol  = record["symbol"]
-    price   = record["price"]
-    chg_pct = record.get("change_pct", 0)
-    vol     = record.get("volume", 0)
+    price   = record.get("price")
+    chg_pct = record.get("change_pct")
+    vol     = record.get("volume")
     t       = record.get("time", "—")
-    arrow   = "▲" if chg_pct >= 0 else "▼"
-    cls     = "card-change-up" if chg_pct >= 0 else "card-change-down"
+    error   = record.get("error")
+    
+    is_pinned = symbol in st.session_state.pinned_symbols
+    pin_icon = "★" if is_pinned else "☆"
+    encoded_sym = urllib.parse.quote(symbol)
+    
+    header_html = f'<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;"><div class="card-symbol">{symbol}</div><a href="/?pin={encoded_sym}" target="_self" class="pin-btn" style="text-decoration: none; color: inherit;">{pin_icon}</a></div>'
 
-    return f"""
-    <a href="/?symbol={symbol}" target="_self" style="text-decoration: none; color: inherit;">
-        <div class="price-card">
-            <div class="card-symbol">{symbol}</div>
-            <div class="card-price">{fmt_price(price, symbol)}</div>
-            <div class="{cls}">{arrow} {abs(chg_pct):.3f}%</div>
-            <div class="card-time">🕐 {t}</div>
-            <div class="card-vol">vol {vol:,.2f}</div>
-        </div>
-    </a>
-    """
+    price_html = f'<div class="card-price">{fmt_price(price, symbol)}</div>' if price is not None else ""
+    
+    change_html = ""
+    if chg_pct is not None:
+        arrow = "▲" if chg_pct >= 0 else "▼"
+        cls = "card-change-up" if chg_pct >= 0 else "card-change-down"
+        change_html = f'<div class="{cls}"><span>{arrow}</span> {abs(chg_pct):.3f}%</div>'
+    
+    status_html = ""
+    if error:
+        status_html = f'<div class="card-error">ERR: {error}</div>'
+    elif price is None:
+        status_html = f'<div class="card-error">⏳ INITIALIZING...</div>'
 
-def render_no_data() -> str:
-    return '<div class="price-card"><div class="no-data">⏳ Waiting for data…</div></div>'
+    vol_str = f"{vol:,.0f}" if (vol is not None and vol > 0) else "—"
+
+    return f'<div class="price-card">{header_html}<a href="/?symbol={encoded_sym}" target="_self" style="text-decoration: none; color: inherit; display: block;">{price_html}{change_html}{status_html}<div class="card-time">🕐 {t}</div><div class="card-vol">VOL {vol_str}</div></a></div>'
+
+def render_no_data(symbol: str) -> str:
+    encoded_sym = urllib.parse.quote(symbol)
+    return f'<div class="price-card"><div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;"><div class="card-symbol">{symbol}</div><a href="/?pin={encoded_sym}" target="_self" class="pin-btn" style="text-decoration: none; color: inherit;">☆</a></div><div class="card-error">⏳ CONNECTING...</div></div>'
 
 def render_historical_page(symbol: str):
     if st.button("← Back to Dashboard"):
@@ -154,12 +176,14 @@ def render_historical_page(symbol: str):
     
     fig.update_layout(
         plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
-        font_color='#c9d8e8', margin=dict(l=0, r=0, t=40, b=0),
-        xaxis=dict(showgrid=True, gridcolor='#1a2a40'),
-        yaxis=dict(showgrid=True, gridcolor='#1a2a40'),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+        font_color='#94a3b8', margin=dict(l=0, r=0, t=40, b=0),
+        xaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.05)', tickfont=dict(size=10)),
+        yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.05)', tickfont=dict(size=10)),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, font=dict(size=10))
     )
+    st.markdown('<div class="chart-container">', unsafe_allow_html=True)
     st.plotly_chart(fig, use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
     
     if "RSI 14" in selected_indicators:
         rsi_fig = px.line(df, x='date', y='RSI_14', range_y=[0, 100], height=200)
@@ -180,14 +204,16 @@ st_autorefresh(interval=refresh_secs * 1000, key="data_refresh")
 
 # Header
 st.markdown(
-    """
-    <div class="dash-header">
-        <div>
-            <div class="dash-title">📡 MARKET TRACKER</div>
-            <div class="dash-subtitle"><span class="live-dot"></span>Live prices · Finnhub WebSocket</div>
-        </div>
-    </div>
-    """,
+f"""<div class="dash-header">
+<div>
+<div class="dash-title">MARKET TRACKER</div>
+<div class="dash-subtitle"><span class="live-dot"></span>LIVE GLOBAL MARKET FEEDS</div>
+</div>
+<div style="text-align: right;">
+<div style="font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; color: #94a3b8;">SYSTEM STATUS: <span style="color: #22c55e;">OPERATIONAL</span></div>
+<div style="font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: #475569;">FINNHUB REAL-TIME OVER WS</div>
+</div>
+</div>""",
     unsafe_allow_html=True,
 )
 
@@ -229,6 +255,18 @@ with main_col:
     m2.metric("Total Tracked", sum(len(v) for v in cats.values()))
     m3.metric("Last Update", datetime.now().strftime("%H:%M:%S"))
 
+    # Pinned Section
+    if st.session_state.pinned_symbols:
+        st.markdown('<div class="cat-header">📌 Pinned Assets</div>', unsafe_allow_html=True)
+        cols = st.columns(4)
+        for i, sym in enumerate(sorted(st.session_state.pinned_symbols)):
+            record = prices.get(sym)
+            with cols[i % 4]:
+                if record:
+                    st.markdown(render_card(record), unsafe_allow_html=True)
+                else:
+                    st.markdown(render_no_data(sym), unsafe_allow_html=True)
+
     # Grids
     for cat_name, symbols in cats.items():
         icon = CATEGORY_ICONS.get(cat_name, "📌")
@@ -240,28 +278,28 @@ with main_col:
                 if record:
                     st.markdown(render_card(record), unsafe_allow_html=True)
                 else:
-                    st.markdown(render_no_data(), unsafe_allow_html=True)
+                    st.markdown(render_no_data(sym), unsafe_allow_html=True)
 
 with news_col:
-    st.markdown("### 📰 Latest News")
+    st.markdown('<div class="cat-header">📰 Market Intelligence</div>', unsafe_allow_html=True)
     for item in st.session_state.news_items:
-        st.markdown(f"""
-        <div style='margin-bottom: 12px; border-bottom: 1px solid #1a2a40; padding-bottom: 8px;'>
-            <div style='font-size: 0.85em; font-weight: bold;'>
-                <a href='{item.get("url")}' target='_blank' style='color: #c9d8e8; text-decoration: none;'>{item.get("title")}</a>
-            </div>
-            <div style='font-size: 0.65em; color: #5a7a9a;'>{item.get("source_name")}</div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(
+f"""<div class="news-item">
+<div style='font-size: 0.85rem; font-weight: 600; line-height: 1.4; margin-bottom: 6px;'>
+<a href='{item.get("url")}' target='_blank' style='color: #f1f5f9; text-decoration: none;'>{item.get("title")}</a>
+</div>
+<div style='display: flex; justify-content: space-between; align-items: center;'>
+<span style='font-size: 0.65rem; color: #64748b; background: rgba(100, 116, 139, 0.1); padding: 2px 6px; border-radius: 4px;'>{item.get("source_name")}</span>
+<span style='font-size: 0.6rem; color: #475569;'>{datetime.fromtimestamp(item.get("datetime", time.time())).strftime("%H:%M")}</span>
+</div>
+</div>""", unsafe_allow_html=True)
 
 # Status bar
 st.markdown(
-    f"""
-    <div class="status-bar">
-        <span>MARKET TRACKER v1.1</span>
-        <span>STATUS: ONLINE</span>
-        <span>REFRESH: {refresh_secs}s</span>
-    </div>
-    """,
+f"""<div class="status-bar">
+<span>MARKET TRACKER v1.1</span>
+<span>STATUS: ONLINE</span>
+<span>REFRESH: {refresh_secs}s</span>
+</div>""",
     unsafe_allow_html=True,
 )
