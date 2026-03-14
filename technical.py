@@ -62,3 +62,14 @@ def add_indicators_to_fig(fig: go.Figure, df: pd.DataFrame, selected_indicators:
     # For now, let's keep it simple. If RSI is selected, we might want to return it as a separate info if we can't subplot easily here without refactoring the whole fig creation.
     # Actually, let's just add it as a trace for now, though scales will be off. 
     # A better way is to handle subplots in the caller or here.
+    if "RSI 14" in selected_indicators:
+        fig.add_trace(go.Scatter(x=df['date'], y=df['RSI_14'], name="RSI 14", yaxis="y2", line=dict(color='yellow', width=1.5)))
+        fig.update_layout(
+            yaxis2=dict(
+                title="RSI",
+                overlaying="y",
+                side="right",
+                range=[0, 100],
+                showgrid=False
+            )
+        )

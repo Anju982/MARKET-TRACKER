@@ -15,6 +15,9 @@ from PricesStore import PricesStore
 from WebSocket import WebSocketManager
 from NewsStore import NewsStore
 from historical import get_historical_prices
+from intelligence import get_intelligence_engine
+from vision_agent import get_vision_agent
+from fastapi.staticfiles import StaticFiles
 
 # ── Logging Setup ───────────────────────────────────────────────────────────
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -44,9 +47,11 @@ websocket_manager = WebSocketManager(
     excluded_symbols=WS_EXCLUDED_SYMBOLS,
 )
 
-# ── Historical Cache ────────────────────────────────────────────────────────
+# ── Caches ──────────────────────────────────────────────────────────────────
 historical_cache = {}
+intelligence_cache = {}
 CACHE_TTL = timedelta(minutes=60)
+INTEL_CACHE_TTL = timedelta(hours=6)
 MAX_CACHE_ENTRIES = 20  # Limit memory usage for GCP Free Tier
 
 RANGE_MAP = {
@@ -190,6 +195,122 @@ async def get_historical(symbol: str, range: str = "1Y"):
     except Exception as e:
         logger.error(f"Error fetching historical: {e}")
         raise HTTPException(status_code=500, detail="Fetch failed.")
+
+from pydantic import BaseModel
+
+class ChatRequest(BaseModel):
+    symbol: str
+    query: str
+
+@app.post("/api/chat")
+async def chat_analyst(request: ChatRequest):
+    """Interactive chat with the market analyst."""
+    # Resolve to friendly name (e.g. "GOLD") or keep as is if not in map
+    actual_symbol = SYMBOL_MAP.get(request.symbol.upper(), request.symbol.upper())
+    
+    # price_store.get_symbol returns a dict or None
+    current_metrics = price_store.get_symbol(actual_symbol) or {}
+    
+    engine = get_intelligence_engine()
+    if not engine.client:
+        return {"symbol": request.symbol, "response": "💬 **Chat Offline**: Analyst AI is not connected. Configure `GEMINI_API_KEY`."}
+
+    response = await engine.chat_with_analyst(actual_symbol, request.query, {"metrics": current_metrics})
+    
+    return {"symbol": request.symbol, "response": response}
+
+@app.get("/api/intelligence")
+async def get_intelligence(symbol: str):
+    """
+    Synthesize market intelligence for a given symbol.
+    """
+    # 1. Resolve actual symbol (e.g. "GOLD")
+    actual_symbol = SYMBOL_MAP.get(symbol.upper(), symbol.upper())
+    
+    # 2. Check cache
+    now = datetime.now()
+    if actual_symbol in intelligence_cache:
+        ts, cached_intel = intelligence_cache[actual_symbol]
+        if now - ts < INTEL_CACHE_TTL:
+            return {"symbol": symbol, "analysis": cached_intel, "cached": True}
+
+    # 3. Fetch current metrics
+    current_metrics = price_store.get_symbol(actual_symbol) or {}
+    
+    # 4. Resolve category
+    category = next((cat for cat, syms in CATEGORIES.items() if actual_symbol.upper() in [s.upper() for s in syms]), "General")
+
+    # 5. Fetch historical snapshot for context
+    historical_data = []
+    try:
+        # Get the technical key for yfinance/oanda (e.g. "OANDA:XAU_USD")
+        tech_key = next((k for k, v in SYMBOL_MAP.items() if v.upper() == actual_symbol.upper()), actual_symbol)
+        loop = asyncio.get_running_loop()
+        historical_data = await loop.run_in_executor(None, get_historical_prices, tech_key, now - timedelta(days=7), now)
+    except Exception as e:
+        logger.warning(f"Could not fetch historical for intel: {e}")
+
+    # 6. Synthesize via engine
+    try:
+        engine = get_intelligence_engine()
+        if not engine.client:
+            return {"symbol": symbol, "analysis": "🤖 **Intelligence Terminal Offline**: `GEMINI_API_KEY` is not configured on the server. Please check environment variables.", "cached": False}
+            
+        analysis = await engine.synthesize_market_view(actual_symbol, category, current_metrics, historical_data)
+        intelligence_cache[actual_symbol] = (now, analysis)
+        return {"symbol": symbol, "analysis": analysis, "cached": False}
+    except Exception as e:
+        logger.error(f"Intelligence synthesis failed: {e}")
+        return {"symbol": symbol, "analysis": f"⚠️ **Synthesis Error**: {str(e)}", "cached": False}
+
+class VisionRequest(BaseModel):
+    symbols: list[str]
+    time_range: str = "3M"
+    indicators: list[str] = ["SMA 20", "Bollinger Bands", "RSI 14"]
+    
+@app.post("/api/vision_analysis")
+async def vision_analysis(request: VisionRequest):
+    """
+    Multimodal AI Analyst endpoint.
+    Takes a list of symbols and indicator preferences, generates charts, and passes them to Gemini Vision.
+    """
+    engine = get_vision_agent()
+    if not engine.client:
+        return {"error": "Multimodal AI Analyst requires GEMINI_API_KEY environment variable."}
+        
+    actual_symbols = [SYMBOL_MAP.get(s.upper(), s.upper()) for s in request.symbols]
+    
+    try:
+        results = await engine.batch_analyze(actual_symbols, request.time_range, request.indicators)
+        
+        # Format response
+        response_data = []
+        for sym, analysis, image_path in results:
+            # Revert actual symbol back to requested symbol for frontend mapping if needed
+            req_sym = next((s for s in request.symbols if SYMBOL_MAP.get(s.upper(), s.upper()) == sym), sym)
+            
+            # Use a static endpoint to serve the image, or return base64. 
+            # Returning Base64 is easier without exposing the temp directory directly via static files over uvicorn
+            image_base64 = None
+            if image_path and os.path.exists(image_path):
+                import base64
+                with open(image_path, "rb") as image_file:
+                    image_base64 = base64.b64encode(image_file.read()).decode('utf-8')
+                
+                # Clean up the temp file after reading
+                os.remove(image_path)
+                    
+            response_data.append({
+                "symbol": req_sym,
+                "analysis": analysis,
+                "image_base64": image_base64
+            })
+            
+        return {"results": response_data}
+        
+    except Exception as e:
+        logger.error(f"Vision analysis failed: {e}")
+        return {"error": str(e)}
 
 @app.get("/health")
 async def health():

@@ -11,3 +11,7 @@ yfinance>=0.2.37
 aiohttp>=3.9.0
 websockets>=12.0
 streamlit-autorefresh>=0.0.1
+duckduckgo-search>=6.0.0
+google-genai>=1.0.0
+kaleido>=0.2.1
+Pillow>=9.0.0
