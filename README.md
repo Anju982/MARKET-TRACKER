@@ -1,79 +1,61 @@
-# Market Tracker
+# Market Tracker (GCP Optimized)
 
-A real-time market dashboard built with FastAPI and Streamlit that tracks live prices for Commodities, Bonds, Indices, and Cryptocurrencies using the Finnhub WebSocket API.
+A real-time market dashboard built with FastAPI and Streamlit that tracks live prices for Commodities, Bonds, Indices, and Cryptocurrencies.
 
-## Project Structure
+## ✨ Latest Optimizations for GCP Free Tier
+- **Low Memory Footprint:** Optimized to run comfortably on a **Google Compute Engine `e2-micro`** instance (1GB RAM).
+- **In-Memory Cache Capping:** Added strict limits to `historical_cache` and `NewsStore` to prevent memory exhaustion (OOM).
+- **Async Concurrency:** Removed redundant `threading.Locks` and moved all store updates to the main `asyncio` event loop for better performance.
+- **Single-Container Deployment:** Combined FastAPI and Streamlit into a single Docker image to minimize resource overhead.
 
-- **`main.py`**: The FastAPI backend entry point. It manages API endpoints and initializes the WebSocket connection.
-- **`app.py`**: The Streamlit frontend application. It connects to the FastAPI backend to visualize the live market data.
-- **`PricesStore.py`**: An in-memory thread-safe store managing the state of all tracked symbols.
-- **`WebSocket.py`**: Manages the persistent WebSocket connection to Finnhub to stream live market trades.
-- **`news.py` & `NewsStore.py`**: Fetches and manages real-time news articles from Finnhub.
-- **`historical.py`**: Fetches historical price data using Yahoo Finance.
-- **`technical.py`**: Computes and visualizes technical indicators (SMA, BB, etc.) on interactive charts.
-- **`config.py`**: Contains constants like `SYMBOL_MAP` and `CATEGORIES` for what the application tracks.
-- **`requirment.txt`**: List of Python dependencies required to run the application.
+## 🚀 Quick Start (Docker)
 
-## Prerequisites
-
-1. Python 3.8+
-2. A free Finnhub API Key (Get one from [Finnhub](https://finnhub.io/))
-
-## Setup & Installation
-
-1. **Clone the repository:**
-
+1. **Clone and Setup Environment:**
    ```bash
    git clone https://github.com/Anju982/MARKET-TRACKER.git
    cd MARKET-TRACKER
+   cp .env.example .env
+   # Edit .env and add your FinHubAPI key
    ```
 
-2. **Create and activate a virtual environment (recommended):**
-
+2. **Run with Docker Compose:**
    ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows use: venv\Scripts\activate
+   docker-compose up --build
    ```
+   - Dashboard: `http://localhost:8501`
+   - API Docs: `http://localhost:8000/docs`
 
-3. **Install the required dependencies:**
+## ☁️ Deployment on GCP Free Tier (Compute Engine)
 
+The best way to run this for free 24/7 is on a **Google Compute Engine `e2-micro`** instance.
+
+1. **Create an Instance:**
+   - **Region:** `us-central1` (Iowa), `us-west1` (Oregon), or `us-east1` (South Carolina).
+   - **Machine Type:** `e2-micro` (2 vCPU, 1GB RAM).
+   - **Firewall:** Allow HTTP traffic.
+
+2. **Setup on VM:**
    ```bash
-   pip install -r requirment.txt
+   sudo apt-get update
+   sudo apt-get install -y docker.io docker-compose
    ```
 
-   _(Note: Make sure `websocket-client` and `python-dotenv` are installed)._
+3. **Deploy:**
+   - Clone the repo on the VM.
+   - Run `docker-compose up -d`.
 
-4. **Set up Environment Variables:**
-   Create a `.env` file in the root directory and add your Finnhub API key:
-   ```env
-   FinHubAPI=your_finnhub_api_key_here
-   ```
+## 🛠 Project Structure
 
-## Running the Application
+- **`main.py`**: Optimized FastAPI backend managing API endpoints and background tasks.
+- **`app.py`**: Streamlit frontend connecting to the backend.
+- **`PricesStore.py`**: In-memory store for live market prices.
+- **`WebSocket.py`**: Persistent WebSocket connection to Finnhub.
+- **`news.py` & `NewsStore.py`**: Fetches and manages real-time news articles with a 50-article limit.
+- **`historical.py`**: Fetches historical data using Yahoo Finance.
+- **`technical.py`**: Computes and visualizes technical indicators.
+- **`config.py`**: Constants like `SYMBOL_MAP` and `CATEGORIES`.
 
-This project requires running both the backend API server and the frontend dashboard.
-
-### 1. Start the FastAPI Backend
-
-In your terminal, run the following command to start the backend server:
-
-```bash
-python -m uvicorn main:app
-```
-
-The backend API will be available at `http://localhost:8000`. You can verify it's working by navigating to `http://localhost:8000/health`.
-
-### 2. Start the Streamlit Frontend
-
-Open a **new terminal tab/window**, ensure your virtual environment is activated, and run:
-
-```bash
-streamlit run app.py
-```
-
-The live dashboard will automatically open in your default web browser (typically at `http://localhost:8501`).
-
-## Troubleshooting
-
-- **No data appearing**: Check your backend terminal for any WebSocket authentication errors. Ensure your `FinHubAPI` key in the `.env` file is valid and hasn't exceeded its rate limits.
-- **ModuleNotFoundError**: Ensure all packages in `requirment.txt` are installed in your active Python environment.
+## 🛠 Tech Stack
+- **Backend:** FastAPI, `websockets`, `yfinance`.
+- **Frontend:** Streamlit, `plotly`, `streamlit-autorefresh`.
+- **Infrastructure:** Docker, GCP (e2-micro).
