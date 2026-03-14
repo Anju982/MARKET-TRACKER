@@ -62,3 +62,42 @@ def add_indicators_to_fig(fig: go.Figure, df: pd.DataFrame, selected_indicators:
     # For now, let's keep it simple. If RSI is selected, we might want to return it as a separate info if we can't subplot easily here without refactoring the whole fig creation.
     # Actually, let's just add it as a trace for now, though scales will be off. 
     # A better way is to handle subplots in the caller or here.
+    if "RSI 14" in selected_indicators:
+        fig.add_trace(go.Scatter(x=df['date'], y=df['RSI_14'], name="RSI 14", yaxis="y2", line=dict(color='yellow', width=1.5)))
+        fig.update_layout(
+            yaxis2=dict(
+                title="RSI",
+                overlaying="y",
+                side="right",
+                range=[0, 100],
+                showgrid=False
+            )
+        )
+
+def get_latest_indicators(df: pd.DataFrame) -> dict:
+    """
+    Extract the most recent technical indicators from the DataFrame.
+    """
+    if df.empty:
+        return {}
+    
+    last_row = df.iloc[-1]
+    indicators = {}
+    
+    # Map column names to friendly keys
+    mapping = {
+        'SMA_20': 'sma_20',
+        'SMA_50': 'sma_50',
+        'EMA_20': 'ema_20',
+        'RSI_14': 'rsi_14',
+        'BB_Upper': 'bb_upper',
+        'BB_Mid': 'bb_mid',
+        'BB_Lower': 'bb_lower'
+    }
+    
+    for col, key in mapping.items():
+        if col in last_row:
+            val = last_row[col]
+            indicators[key] = float(val) if pd.notnull(val) else None
+            
+    return indicators

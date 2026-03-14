@@ -87,14 +87,25 @@ def get_historical_prices(
         result = []
         for index, row in data.iterrows():
             try:
-                # After auto_adjust=True the column may be a MultiIndex; handle both
+                open_val = row["Open"]
+                high_val = row["High"]
+                low_val = row["Low"]
                 close_val = row["Close"]
-                if hasattr(close_val, "iloc"):
-                    close_val = close_val.iloc[0]
-                price = float(close_val)
+                vol_val = row["Volume"]
+                
+                if hasattr(open_val, "iloc"): open_val = open_val.iloc[0]
+                if hasattr(high_val, "iloc"): high_val = high_val.iloc[0]
+                if hasattr(low_val, "iloc"): low_val = low_val.iloc[0]
+                if hasattr(close_val, "iloc"): close_val = close_val.iloc[0]
+                if hasattr(vol_val, "iloc"): vol_val = vol_val.iloc[0]
+                
                 result.append({
                     "date": index.strftime("%Y-%m-%dT%H:%M:%S"),
-                    "price": price,
+                    "open": float(open_val),
+                    "high": float(high_val),
+                    "low": float(low_val),
+                    "price": float(close_val),
+                    "volume": float(vol_val),
                 })
             except Exception as row_err:
                 logger.warning(f"[historical] Skipping row for {ticker}: {row_err}")

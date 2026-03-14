@@ -4,7 +4,7 @@ This file provides system instructions and architectural context for AI coding a
 
 ## Project Overview
 
-The Commodity Price Tracker is a real-time dashboard that fetches live market data via the Finnhub WebSocket API and displays it using a Streamlit frontend. It uses a FastAPI backend to manage the connection and serve the latest prices to the frontend.
+The Commodity Price Tracker is a real-time dashboard that fetches live market data via Finnhub/Yahoo Finance and displays it using a Streamlit frontend. It features a standardized Data Hydration Pipeline that automatically synchronizes historical data, technical analysis, market intelligence, and Multimodal Vision reasoning upon asset selection.
 
 ## Tech Stack
 
@@ -16,14 +16,14 @@ The Commodity Price Tracker is a real-time dashboard that fetches live market da
 ## Code Architecture
 
 1. **`app.py`:** The Streamlit dashboard. It polls `http://localhost:8000/prices` every N seconds and builds the UI. Contains custom CSS for a dark-themed, glassmorphic layout.
-2. **`main.py`:** The FastAPI application. Initializes the application state, manages CORS, and exposes `/prices` and `/health` REST endpoints.
-3. **`PricesStore.py`:** An in-memory, thread-safe data structure (`self.data`) wrapped with a `threading.Lock()` to hold the latest price updates.
-4. **`WebSocket.py`:** A `WebSocketManager` class running in a daemon thread. It parses incoming Finnhub JSON `trade` messages and pushes the latest `p` (price), `v` (volume), and `t` (timestamp) to the `PricesStore`.
-5. **`config.py`:** Centralized configuration containing `SYMBOL_MAP` (mapping API symbols to readable names) and `CATEGORIES` (grouping assets).
-6. **`news.py`:** Fetches market news from Finnhub API.
-7. **`NewsStore.py`:** Thread-safe in-memory store for news articles with debounced fetching.
-8. **`historical.py`:** Fetches historical price data from Yahoo Finance and maps API symbols to tickers.
-9. **`technical.py`:** Calculates technical indicators (SMA, EMA, RSI, Bollinger Bands) and adds them to Plotly charts.
+2. **`main.py`:** The FastAPI application. Manages background polling, WebSockets, and the `/api/hydrate` pipe which orchestrates concurrent analysis layers.
+3. **`PricesStore.py`:** An in-memory, thread-safe data structure holding the latest price updates.
+4. **`WebSocket.py`:** A `WebSocketManager` class running in a daemon thread. Parses Finnhub trade messages.
+5. **`config.py`:** Central configuration for `SYMBOL_MAP` and `CATEGORIES`.
+6. **`intelligence.py`:** `MarketIntelligence` engine that synthesizes market signals via DuckDuckGo and the Gemini API.
+7. **`vision_agent.py`:** `VisionAgent` that generates technical charts and performs multimodal reasoning using `gemini-2.5-flash`.
+8. **`historical.py`:** Data fetcher for Yahoo Finance historical candles.
+9. **`technical.py`:** Technical indicator calculations and Plotly visualization overlays.
 
 ## Future Development Guidelines
 
@@ -31,6 +31,7 @@ When adding features or fixing bugs in this project, adhere to the following rul
 
 1. **State Management:** The `PricesStore` must remain thread-safe. Always use `with self.lock:` when reading or mutating `self.data`.
 2. **Configuration vs Code:** Do not hardcode new symbols inside the logic files. Any new assets to be tracked must be added to `SYMBOL_MAP` and `CATEGORIES` in `config.py`.
-3. **Frontend Styling:** Do not remove the custom CSS injected in `app.py` without replacing it with an equivalent modern aesthetic. Avoid basic Streamlit layouts—aim for a polished, professional look.
-4. **Error Handling:** When updating the `WebSocket.py` message parser, ensure exceptions are caught inside `on_message` so that a malformed payload doesn't crash the background thread.
-5. **Dependencies:** Use the activated `venvcomodity` virtual environment before running or testing. New dependencies must be appended to `requirment.txt`.
+3. **Hydration Sync:** Page-load functions in `app.py` should ideally use the `/api/hydrate` suite for atomicity and performance.
+5. **Model Versioning:** Use `gemini-2.5-flash` for all vision and intelligence tasks unless low-latency requirements dictate otherwise.
+6. **Concurrency:** Always use `asyncio.gather` for independent external API calls (e.g., in the hydration pipeline) to avoid blocking the main thread.
+7. **Dependencies:** Update `requirements.txt` when adding new AI or data libraries.
