@@ -91,6 +91,14 @@ def fetch_intelligence(symbol: str) -> dict:
     except Exception as e:
         return {"error": str(e), "analysis": "Could not synthesize intelligence at this time."}
 
+def fetch_hydration_suite(symbol: str, time_range: str = "1Y") -> dict:
+    try:
+        r = requests.get(f"{BACKEND_URL}/api/hydrate?symbol={symbol}&range={time_range}", timeout=60)
+        r.raise_for_status()
+        return r.json()
+    except Exception as e:
+        return {"error": f"Hydration service failure: {str(e)}"}
+
 def post_chat(symbol: str, query: str) -> str:
     try:
         r = requests.post(f"{BACKEND_URL}/api/chat", json={"symbol": symbol, "query": query}, timeout=30)
@@ -166,21 +174,23 @@ def render_historical_page(symbol: str):
             default=[]
         )
     
-    with st.spinner(f"Fetching data..."):
-        result = fetch_historical(symbol, time_range)
+    with st.spinner(f"Hydrating {symbol} intelligence suite..."):
+        hydration = fetch_hydration_suite(symbol, time_range)
     
-    if "error" in result:
-        st.error(f"Error: {result['error']}")
+    if "error" in hydration:
+        st.error(f"Pipeline Error: {hydration['error']}")
+        # Fallback to basic historical if hydration fails? For now, just error.
     else:
-        data = result.get("data", [])
+        # ── Historical & Technical ──
+        data = hydration.get("historical", [])
         if not data:
-            st.warning("No data available.")
+            st.warning("No historical data available.")
         else:
             df = pd.DataFrame(data)
             df['date'] = pd.to_datetime(df['date'])
             
-            if selected_indicators:
-                df = technical.calculate_indicators(df)
+            # Indicators are pre-calculated on backend, but we reuse calculate_indicators for df compatibility with plotter
+            df = technical.calculate_indicators(df)
             
             fig = go.Figure()
             fig.add_trace(go.Scatter(x=df['date'], y=df['price'], mode='lines', name='Price', line=dict(color='#00e5a0', width=2)))
@@ -205,6 +215,44 @@ def render_historical_page(symbol: str):
                 rsi_fig.add_hline(y=70, line_dash="dash", line_color="red")
                 rsi_fig.add_hline(y=30, line_dash="dash", line_color="green")
                 st.plotly_chart(rsi_fig, use_container_width=True)
+
+        # ── Intelligence & Vision (Automated Loading) ──
+        st.divider()
+        col_intel, col_vis = st.columns([1, 1])
+        
+        with col_intel:
+            st.markdown("#### 💬 Market Intelligence Synthesis")
+            intel_text = hydration.get("intelligence", {}).get("synthesis", "No synthesis available.")
+            st.markdown(intel_text)
+            
+            # Quick chat option integrated
+            with st.expander("Inquire further"):
+                prompt = st.text_input("Ask about this signal", key="quick_chat_input")
+                if prompt:
+                    with st.spinner("Analyzing..."):
+                        resp = post_chat(symbol, prompt)
+                        st.write(resp)
+
+        with col_vis:
+            st.markdown("#### 👁️ Multimodal AI Reasoning")
+            vision = hydration.get("vision", {})
+            analysis = vision.get("analysis", {})
+            
+            if analysis.get("error"):
+                st.error(analysis["error"])
+            else:
+                c1, c2 = st.columns([1, 1])
+                with c1:
+                    st.metric("Signal", analysis.get("direction", "N/A"))
+                with c2:
+                    st.metric("Rec", analysis.get("recommendation", "N/A"))
+                
+                st.info(analysis.get("narrative", "—"))
+                
+                if vision.get("image_base64"):
+                    import base64
+                    img_bytes = base64.b64decode(vision["image_base64"])
+                    st.image(img_bytes, use_column_width=True, caption="Pipeline Generated Analysis Chart")
 
 # ── Sub-Pages ────────────────────────────────────────────────────────────────
 

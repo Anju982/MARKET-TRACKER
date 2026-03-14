@@ -4,6 +4,7 @@ import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from typing import Dict, Optional
+import pandas as pd
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query
@@ -17,6 +18,7 @@ from NewsStore import NewsStore
 from historical import get_historical_prices
 from intelligence import get_intelligence_engine
 from vision_agent import get_vision_agent
+import technical
 from fastapi.staticfiles import StaticFiles
 
 # ── Logging Setup ───────────────────────────────────────────────────────────
@@ -311,6 +313,81 @@ async def vision_analysis(request: VisionRequest):
     except Exception as e:
         logger.error(f"Vision analysis failed: {e}")
         return {"error": str(e)}
+
+@app.get("/api/hydrate")
+async def hydrate_asset(symbol: str, range: str = "1Y"):
+    """
+    Standardized pipeline for asset data hydration.
+    Returns historical data, technical indicators, market intelligence, and vision analysis.
+    """
+    # 1. Resolve Symbols
+    actual_symbol = next((k for k, v in SYMBOL_MAP.items() if v.upper() == symbol.upper() or k.upper() == symbol.upper()), None)
+    if not actual_symbol:
+        raise HTTPException(status_code=400, detail=f"Invalid symbol: {symbol}")
+    
+    friendly_symbol = SYMBOL_MAP.get(actual_symbol, actual_symbol)
+    
+    # 2. Time Range
+    range_delta = RANGE_MAP.get(range.upper(), RANGE_MAP["1Y"])
+    now = datetime.now()
+    start_date = now - range_delta
+    
+    try:
+        # A. Data Layer: Historical Fetch
+        loop = asyncio.get_running_loop()
+        hist_data = await loop.run_in_executor(None, get_historical_prices, actual_symbol, start_date, now)
+        
+        if not hist_data:
+            raise HTTPException(status_code=404, detail="No historical data found.")
+            
+        # B. Compute Layer: Technical Analysis
+        df = pd.DataFrame(hist_data)
+        df['date'] = pd.to_datetime(df['date'])
+        df = technical.calculate_indicators(df)
+        indicators = technical.get_latest_indicators(df)
+        
+        # C. Intelligence & Vision Layers (Concurrent Execution)
+        # We'll use 3M range for Vision as per its default for better visual resolution
+        vision_agent = get_vision_agent()
+        intel_engine = get_intelligence_engine()
+        
+        category = next((cat for cat, syms in CATEGORIES.items() if friendly_symbol.upper() in [s.upper() for s in syms]), "General")
+        current_metrics = price_store.get_symbol(friendly_symbol) or {}
+        
+        # We'll run Intel and Vision in parallel
+        intel_task = intel_engine.synthesize_market_view(friendly_symbol, category, current_metrics, hist_data[-10:])
+        vision_task = vision_agent.process_ticker_with_data(friendly_symbol, df, ["SMA 20", "Bollinger Bands", "RSI 14"])
+        
+        intel_res, vision_results = await asyncio.gather(intel_task, vision_task)
+        
+        # vision_results is (symbol, analysis, image_path)
+        vis_sym, vis_analysis, vis_image_path = vision_results
+        
+        # Image handling
+        image_base64 = None
+        if vis_image_path and os.path.exists(vis_image_path):
+            import base64
+            with open(vis_image_path, "rb") as image_file:
+                image_base64 = base64.b64encode(image_file.read()).decode('utf-8')
+            os.remove(vis_image_path)
+            
+        return {
+            "symbol": friendly_symbol,
+            "historical": hist_data,
+            "technical": indicators,
+            "intelligence": {
+                "synthesis": intel_res
+            },
+            "vision": {
+                "analysis": vis_analysis,
+                "image_base64": image_base64
+            },
+            "timestamp": now.isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Hydration failed for {symbol}: {e}")
+        raise HTTPException(status_code=500, detail=f"Hydration pipeline failed: {str(e)}")
 
 @app.get("/health")
 async def health():

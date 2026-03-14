@@ -48,7 +48,7 @@ class VisionAgent:
         self.api_key = gemini_api_key
         if self.api_key:
             self.client = genai.Client(api_key=self.api_key)
-            self.model_id = 'gemini-2.0-flash'
+            self.model_id = 'gemini-2.5-flash'
         else:
             self.client = None
             logger.warning("Gemini API key not found. Vision features will be limited.")
@@ -133,6 +133,29 @@ class VisionAgent:
             logger.error(f"Error during Vision analysis for {symbol}: {e}")
             return {"error": str(e)}
 
+    async def process_ticker_with_data(self, symbol: str, df: pd.DataFrame, indicators: List[str], signal_text: str = "No relevant recent signals found.") -> Tuple[str, Dict, str]:
+        """
+        Process a ticker using pre-fetched DataFrame and signals, to avoid redundant network calls.
+        """
+        image_path = ""
+        try:
+            # Ensure indicators are calculated
+            # Calculate all indicators base (required by add_indicators_to_fig)
+            if 'SMA_20' not in df.columns:
+                df = calculate_indicators(df)
+            
+            # Generate Image
+            image_path = await self.generate_chart_image(symbol, df, indicators)
+            
+            # Analyze Image + Web Signals
+            analysis = await self.analyze_chart(symbol, image_path, signal_text)
+            
+            return symbol, analysis, image_path
+            
+        except Exception as e:
+            logger.error(f"Failed to process ticker {symbol}: {e}")
+            return symbol, {"error": str(e)}, image_path
+
     async def process_ticker(self, symbol: str, time_range: str, indicators: List[str]) -> Tuple[str, Dict, str]:
         """
         End-to-end processing for a single ticker: Data Fetch -> Chart -> Vision AI
@@ -164,19 +187,7 @@ class VisionAgent:
         signals = await intel_engine.get_search_signals(search_query, max_results=3)
         signal_text = "\n".join([f"- {s['title']}: {s['body']}" for s in signals]) if signals else "No relevant recent signals found."
         
-        # 2. Generate Image
-        image_path = ""
-        try:
-            image_path = await self.generate_chart_image(symbol, df, indicators)
-            
-            # 3. Analyze Image + Web Signals
-            analysis = await self.analyze_chart(symbol, image_path, signal_text)
-            
-            return symbol, analysis, image_path
-            
-        except Exception as e:
-            logger.error(f"Failed to process ticker {symbol}: {e}")
-            return symbol, {"error": str(e)}, image_path
+        return await self.process_ticker_with_data(symbol, df, indicators, signal_text)
 
     async def batch_analyze(self, symbols: List[str], time_range: str, indicators: List[str]) -> List[Tuple[str, Dict, str]]:
         """

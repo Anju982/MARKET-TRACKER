@@ -28,7 +28,7 @@ class MarketIntelligence:
         self.api_key = gemini_api_key
         if self.api_key:
             self.client = genai.Client(api_key=self.api_key)
-            self.model_id = 'gemini-2.0-flash-lite' # Updated to latest stable Lite model
+            self.model_id = 'gemini-2.5-flash' # Updated to latest stable model
         else:
             self.client = None
             logger.warning("Gemini API key not found. Intelligence features will be limited.")
