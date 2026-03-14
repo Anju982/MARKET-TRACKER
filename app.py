@@ -206,7 +206,7 @@ def render_historical_page(symbol: str):
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, font=dict(size=10))
             )
             st.markdown('<div class="chart-container">', unsafe_allow_html=True)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
             st.markdown('</div>', unsafe_allow_html=True)
             
             if "RSI 14" in selected_indicators:
@@ -214,7 +214,7 @@ def render_historical_page(symbol: str):
                 rsi_fig.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font_color='#c9d8e8', margin=dict(l=0, r=0, t=20, b=0))
                 rsi_fig.add_hline(y=70, line_dash="dash", line_color="red")
                 rsi_fig.add_hline(y=30, line_dash="dash", line_color="green")
-                st.plotly_chart(rsi_fig, use_container_width=True)
+                st.plotly_chart(rsi_fig, width="stretch")
 
         # ── Intelligence & Vision (Automated Loading) ──
         st.divider()
@@ -252,7 +252,7 @@ def render_historical_page(symbol: str):
                 if vision.get("image_base64"):
                     import base64
                     img_bytes = base64.b64decode(vision["image_base64"])
-                    st.image(img_bytes, use_column_width=True, caption="Pipeline Generated Analysis Chart")
+                    st.image(img_bytes, width="stretch", caption="Pipeline Generated Analysis Chart")
 
 # ── Sub-Pages ────────────────────────────────────────────────────────────────
 
@@ -308,7 +308,7 @@ def render_multimodal_analyst():
                             "Support": analysis.get("key_levels", {}).get("support", "N/A"),
                             "Resistance": analysis.get("key_levels", {}).get("resistance", "N/A")
                         })
-                st.dataframe(pd.DataFrame(summary_data), use_container_width=True)
+                st.dataframe(pd.DataFrame(summary_data), width="stretch")
                 
                 st.markdown("---")
                 
@@ -328,7 +328,7 @@ def render_multimodal_analyst():
                                     if res.get("image_base64"):
                                         import base64
                                         img_bytes = base64.b64decode(res["image_base64"])
-                                        st.image(img_bytes, use_column_width=True, caption=f"Generated Technical Chart for {res['symbol']}")
+                                        st.image(img_bytes, width="stretch", caption=f"Generated Technical Chart for {res['symbol']}")
                                     else:
                                         st.warning("No chart image returned.")
                                 
@@ -360,7 +360,7 @@ def render_market_intelligence():
         symbol = st.text_input("Enter a ticker to analyze (e.g., OANDA:XAU_USD, AAPL, BTC-USD)", "AAPL")
     with col2:
         st.markdown("<br>", unsafe_allow_html=True)
-        run_btn = st.button("Generate Report", type="primary", use_container_width=True)
+        run_btn = st.button("Generate Report", type="primary", width="stretch")
         
     if run_btn:
         st.session_state.intel_symbol = symbol.strip()

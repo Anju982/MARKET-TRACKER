@@ -6,6 +6,53 @@ from typing import Optional, List, Dict
 
 logger = logging.getLogger(__name__)
 
+async def fetch_symbol_news_async(symbol: str, api_token: str, days_back: int = 7) -> List[Dict]:
+    """
+    Fetches company-specific news from Finnhub API asynchronously.
+    """
+    from datetime import datetime, timedelta
+    
+    end_date = datetime.now().strftime('%Y-%m-%d')
+    start_date = (datetime.now() - timedelta(days=days_back)).strftime('%Y-%m-%d')
+    
+    base_url = "https://finnhub.io/api/v1/company-news"
+    params = {
+        'symbol': symbol,
+        'from': start_date,
+        'to': end_date,
+        'token': api_token
+    }
+
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.get(base_url, params=params, timeout=10) as response:
+                if response.status == 429:
+                    logger.warning(f"Rate limit exceeded (429) for {symbol}")
+                    return []
+                
+                response.raise_for_status()
+                articles = await response.json()
+
+                if not articles:
+                    return []
+
+                all_data = []
+                for article in articles[:20]: # Limit to top 20
+                    dt = datetime.fromtimestamp(article.get('datetime', 0), tz=timezone.utc)
+                    all_data.append({
+                        'title': article.get('headline'),
+                        'source_name': article.get('source'),
+                        'published_at': dt.isoformat(),
+                        'url': article.get('url'),
+                        'uuid': str(article.get('id', hash(article.get('url')))),
+                        'image': article.get('image'),
+                        'summary': article.get('summary')
+                    })
+                return all_data
+        except Exception as e:
+            logger.error(f"Error fetching symbol news for {symbol}: {e}")
+    return []
+
 async def fetch_commodity_news_async(api_token: str, max_pages: int = 1, since_timestamp: Optional[str] = None) -> List[Dict]:
     """
     Fetches commodity news from Finnhub API asynchronously.

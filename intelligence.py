@@ -24,11 +24,12 @@ Output analysis focusing on volatility, volume trends, and geopolitical risk fac
 """
 
 class MarketIntelligence:
-    def __init__(self, gemini_api_key: str):
+    def __init__(self, gemini_api_key: str, finhub_api_key: str = None):
         self.api_key = gemini_api_key
+        self.finhub_api_key = finhub_api_key
         if self.api_key:
             self.client = genai.Client(api_key=self.api_key)
-            self.model_id = 'gemini-2.5-flash' # Updated to latest stable model
+            self.model_id = 'gemini-2.5-flash' 
         else:
             self.client = None
             logger.warning("Gemini API key not found. Intelligence features will be limited.")
@@ -42,6 +43,41 @@ class MarketIntelligence:
         except Exception as e:
             logger.error(f"DuckDuckGo search error: {e}")
             return []
+
+    async def search_news_finhub(self, symbol: str) -> List[Dict]:
+        """Fetch news from Finnhub for a symbol."""
+        if not self.finhub_api_key:
+            return []
+        from news import fetch_symbol_news_async
+        return await fetch_symbol_news_async(symbol, self.finhub_api_key)
+
+    async def search_news_ddg(self, symbol: str, category: str) -> List[Dict]:
+        """Fetch news from DuckDuckGo for a symbol."""
+        query = f"{symbol} {category} market news latest"
+        signals = await self.get_search_signals(query, max_results=10)
+        return signals
+
+    async def search_agent(self, symbol: str, category: str, tech_ticker: str = None) -> Dict:
+        """
+        Web Search Agent: Aggregates news from Finnhub and DuckDuckGo.
+        """
+        ticker = tech_ticker or symbol
+        
+        # Format ticker for Finnhub
+        fh_ticker = ticker
+        if ":" in ticker:
+            fh_ticker = ticker.split(":")[-1].replace("_", "")
+            
+        fh_news_task = asyncio.create_task(self.search_news_finhub(fh_ticker))
+        ddg_news_task = asyncio.create_task(self.search_news_ddg(symbol, category))
+        
+        fh_news, ddg_news = await asyncio.gather(fh_news_task, ddg_news_task)
+        
+        return {
+            "symbol": symbol,
+            "finnhub": fh_news,
+            "duckduckgo": ddg_news
+        }
 
     async def synthesize_market_view(self, symbol: str, category: str, current_metrics: Dict, historical_data: Optional[List] = None) -> str:
         """Synthesize market intelligence using Gemini."""
@@ -119,5 +155,6 @@ def get_intelligence_engine() -> MarketIntelligence:
     global intelligence_engine
     if intelligence_engine is None:
         api_key = os.getenv("GEMINI_API_KEY")
-        intelligence_engine = MarketIntelligence(api_key)
+        fh_key = os.getenv("FinHubAPI")
+        intelligence_engine = MarketIntelligence(api_key, fh_key)
     return intelligence_engine

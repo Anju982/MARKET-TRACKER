@@ -221,6 +221,29 @@ async def chat_analyst(request: ChatRequest):
     
     return {"symbol": request.symbol, "response": response}
 
+@app.get("/api/search_news")
+async def search_market_news(symbol: str):
+    """
+    Web Search Agent endpoint: Fetches symbol-specific news from Finnhub and DuckDuckGo.
+    """
+    # 1. Resolve actual symbol (e.g. "GOLD")
+    actual_symbol = SYMBOL_MAP.get(symbol.upper(), symbol.upper())
+    
+    # 2. Resolve tech ticker for Finnhub (e.g. "OANDA:XAU_USD")
+    tech_key = next((k for k, v in SYMBOL_MAP.items() if v.upper() == actual_symbol.upper()), actual_symbol)
+    
+    # 3. Resolve category
+    category = next((cat for cat, syms in CATEGORIES.items() if actual_symbol.upper() in [s.upper() for s in syms]), "General")
+
+    engine = get_intelligence_engine()
+    
+    try:
+        news_results = await engine.search_agent(actual_symbol, category, tech_key)
+        return news_results
+    except Exception as e:
+        logger.error(f"Search agent failed for {symbol}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/intelligence")
 async def get_intelligence(symbol: str):
     """
